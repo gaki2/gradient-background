@@ -1,9 +1,10 @@
 import {Sin} from "./Sin";
 import {random} from "./util";
+import {getRandomValue, hexToRgb} from "./util/util";
 
 type BallPropsType = {
     radius: number,
-    color: string,
+    colors: string[],
     x: number,
     y: number,
 } & Partial<{
@@ -26,11 +27,12 @@ export class Ball {
     private radius: number;
     private maxRadius: number;
     private minRadius: number;
-    private color: string;
+    private colors: string[];
     private x: number;
     private y: number;
     private dx: number;
     private dy: number;
+    private color: string;
     /**
      * {@link SizeChangeType, SizeChangeTool}
      */
@@ -40,22 +42,30 @@ export class Ball {
         radius,
         maxRadius,
         minRadius,
-        color,
+        colors,
         x,
         y,
                 }: BallPropsType) {
         this.radius = radius;
         this.maxRadius = maxRadius;
         this.minRadius = minRadius;
-        this.color = color;
+        this.colors = colors;
         this.x = x;
         this.y = y;
+        this.color =  getRandomValue(this.colors);
     }
 
-    /**
-     * @deprecated changeMovingDirection 매서드로 이 함수의 역할을 대체할 수 있음.
-     * private 에서는 써도 좋지만, public 에서는 굳이..?
-     */
+    public resize(minR: number, maxR: number) {
+        this.setRadius(minR, maxR);
+        this.sizeChangeTool.type = null;
+    }
+
+    public setRadius(minR: number, maxR: number) {
+        this.minRadius = minR;
+        this.radius = minR;
+        this.maxRadius = maxR;
+    }
+
     public isCollided(stageWidth: number, stageHeight: number) {
         return (
             this.x - this.radius <= 0 ||
@@ -65,19 +75,25 @@ export class Ball {
         )
     }
 
-    public getCollidedDirection(stageWidth: number, stageHeight: number): CollideDirection | null {
-        if (!this.isCollided(stageWidth, stageHeight)) {
-            return null;
+    public manageCollision(top: number, right: number, bottom: number, left: number) {
+        if (this.x - this.radius < left) {
+            this.x = this.radius + left;
+            this.dx *= -1;
+        }
+        if (this.x + this.radius > right) {
+            this.x = right - this.radius;
+            this.dx *= -1;
         }
 
-        let ret = '';
-
-        if (this.x - this.radius <= 0 || this.x + this.radius >= stageWidth) {
-            ret += 'x';
-        } else if (this.y - this.radius <= 0 || this.y + this.radius >= stageHeight) {
-            ret += 'y';
+        if (this.y - this.radius < top) {
+            this.y = this.radius + top;
+            this.dy *= -1;
         }
-        return ret as CollideDirection;
+
+        if (this.y + this.radius > bottom) {
+            this.y = bottom - this.radius;
+            this.dy *= -1;
+        }
     }
 
     public changeMovingDirection(direction: 'x' | 'y' | 'xy') {
@@ -131,8 +147,40 @@ export class Ball {
         }
     }
 
+    public setSpeed(dx: number, dy: number) {
+        this.dx = dx;
+        this.dy = dy;
+    }
+
+    private applyForce() {
+        this.x += this.dx;
+        this.y += this.dy;
+    }
+
+    public update(ctx:CanvasRenderingContext2D, changeSize = true, move = true) {
+        if (changeSize) {
+            this.changeSize('sin');
+        }
+        if (move) {
+            this.applyForce();
+            // 공이 움직일수 있는 영역의 크기 9배로 늘림.
+            const ratio = 0.3;
+            this.manageCollision(-ctx.canvas.height * ratio, ctx.canvas.width * (1 + ratio), ctx.canvas.height * (1 + ratio), -ctx.canvas.width * ratio);
+        }
+    }
+
     public draw(ctx: CanvasRenderingContext2D) {
-        ctx.fillStyle = this.color;
+        const gradient = ctx.createRadialGradient(
+            this.x,
+            this.y,
+            this.radius * 0.01,
+            this.x,
+            this.y,
+            this.radius
+        );
+        gradient.addColorStop(0, hexToRgb(this.color,1));
+        gradient.addColorStop(1, hexToRgb(this.color,0));
+        ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI, false);
         ctx.closePath();
